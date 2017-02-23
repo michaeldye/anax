@@ -83,7 +83,7 @@ func (b *TorrentWorker) start() {
 
 				cmd := command.(*FetchCommand)
 				glog.V(2).Infof("URL to fetch: %s\n", cmd.AgreementLaunchContext.Configure.TorrentURL)
-				imageFiles, err := Fetch(cmd.AgreementLaunchContext.Configure.TorrentURL, cmd.AgreementLaunchContext.Configure.ImageHashes, cmd.AgreementLaunchContext.Configure.ImageSignatures, b.Config.Edge.CACertsPath, b.Config.Edge.TorrentDir, b.Config.Edge.PublicKeyPath, b.client)
+				imageFiles, err := Fetch(cmd.AgreementLaunchContext.Configure.TorrentURL, cmd.AgreementLaunchContext.Configure.ImageHashes, cmd.AgreementLaunchContext.Configure.ImageSignatures, b.Config.Edge.DefaultTorrentWebSeedURL, b.Config.Edge.CheckImageSig, b.Config.Edge.CACertsPath, b.Config.Edge.TorrentDir, b.Config.Edge.PublicKeyPath, b.client)
 				if err != nil {
 					// TODO: write error out, then:
 					// 1. retry to fetch up to a limit

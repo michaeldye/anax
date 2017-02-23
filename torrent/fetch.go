@@ -20,8 +20,6 @@ import (
 	"github.com/michaeldye/torrent"
 )
 
-const HORIZON_WEBSEED_DEFAULT = "https://images.bluehorizon.network/"
-
 func imageCheck(torrentDir string, images []string, fn func(string, *os.File) (bool, error)) (bool, error) {
 	for _, imageFile := range images {
 		if file, err := os.Open(path.Join(torrentDir, imageFile)); err != nil {
@@ -122,12 +120,12 @@ func httpDl(httpClient *http.Client, torrentPath string, url string, group *sync
 }
 
 // an alternative for resource-constrained clients, only uses webseed
-func downloadTorrentFromWebSeed(files []torrent.File, seedURLs interface{}, httpClient *http.Client, torrentDir string) error {
+func downloadTorrentFromWebSeed(files []torrent.File, seedURLs interface{}, httpClient *http.Client, torrentDir string, defaultWebSeedURL string) error {
 
 	var webSeed string
 	if seedURLs == nil {
 		// try our default
-		webSeed = HORIZON_WEBSEED_DEFAULT
+		webSeed = defaultWebSeedURL
 	} else {
 		seeds := seedURLs.([]string)
 		// TODO: expand to try multiple webseeds
@@ -155,7 +153,7 @@ func downloadTorrentFromWebSeed(files []torrent.File, seedURLs interface{}, http
 	return nil
 }
 
-func downloadTorrent(torrentFile *os.File, client *torrent.Client, httpClient *http.Client, torrentDir string) ([]string, error) {
+func downloadTorrent(torrentFile *os.File, client *torrent.Client, httpClient *http.Client, torrentDir string, defaultWebSeedURL string) ([]string, error) {
 
 	torrent, err := client.AddTorrentFromFile(torrentFile.Name())
 	if err != nil {
@@ -170,7 +168,7 @@ func downloadTorrent(torrentFile *os.File, client *torrent.Client, httpClient *h
 			glog.Infof("Torrent detail:\n  files: %v\ninfohash: %v\n", torrent.Files(), torrent.InfoHash())
 			if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" || runtime.GOARCH == "amd64" || runtime.GOARCH == "386" {
 				glog.Infof("Platform: %v. Using web seed for this platform to avoid taxing its meager resources.", runtime.GOARCH)
-				if err := downloadTorrentFromWebSeed(torrent.Files(), torrent.MetaInfo().URLList, httpClient, torrentDir); err != nil {
+				if err := downloadTorrentFromWebSeed(torrent.Files(), torrent.MetaInfo().URLList, httpClient, torrentDir, defaultWebSeedURL); err != nil {
 					return nil, fmt.Errorf("Failed downloading torrent files from web seed. Error: %v", err)
 				}
 			} else {
@@ -216,7 +214,7 @@ func httpClient(caFile string) (*http.Client, error) {
 }
 
 // Fetch Uses given torrent client to fetch torrent w/ torrent file at given url to the destination configured with the Client. Checks given SHA1 hash of the downloaded image file or errors. Blocks until content is fetched.
-func Fetch(url url.URL, imageHashes map[string]string, imageSignatures map[string]string, caCertsPath string, torrentDir string, publicKeyFile string, client *torrent.Client) ([]string, error) {
+func Fetch(url url.URL, imageHashes map[string]string, imageSignatures map[string]string, defaultWebSeedURL string, checkImageSig bool, caCertsPath string, torrentDir string, publicKeyFile string, client *torrent.Client) ([]string, error) {
 
 	httpClient, err := httpClient(caCertsPath)
 	if err != nil {
@@ -249,18 +247,22 @@ func Fetch(url url.URL, imageHashes map[string]string, imageSignatures map[strin
 
 				glog.Infof("Downloading torrent file %v", url.String())
 
-				images, err := downloadTorrent(torrentFile, client, httpClient, torrentDir)
+				images, err := downloadTorrent(torrentFile, client, httpClient, torrentDir, defaultWebSeedURL)
 				if err != nil {
 					return nil, fmt.Errorf("Unable to fetch image file(s) using torrent file: %s. Error: %s", torrentFile.Name(), err)
 				} else {
 
 					if hashCheck, err := CheckHashes(torrentDir, images, imageHashes); err != nil {
 						return nil, fmt.Errorf("Error checking hashes provided for images: %v. Error: %v", imageHashes, err)
-					} else if signatureCheck, err := CheckSignatures(torrentDir, images, imageSignatures, publicKeyFile); err != nil {
-						return nil, fmt.Errorf("Error checking cryptographic signatures provided for images: %v. Error: %v", imageSignatures, err)
-					} else if !(hashCheck && signatureCheck) {
-						return nil, errors.New("Invalid hashes or signatures for images, refusing to load")
 					} else {
+						// conditionally check image signatures
+						if checkImageSig {
+							if signatureCheck, err := CheckSignatures(torrentDir, images, imageSignatures, publicKeyFile); err != nil {
+								return nil, fmt.Errorf("Error checking cryptographic signatures provided for images: %v. Error: %v", imageSignatures, err)
+							} else if !(hashCheck && signatureCheck) {
+								return nil, errors.New("Invalid hashes or signatures for images, refusing to load")
+							}
+						}
 						// success!
 						glog.Infof("Finished downloading image content: %v", images)
 

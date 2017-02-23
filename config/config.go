@@ -36,6 +36,8 @@ type Config struct {
 	// these Ids could be provided in config or discovered after startup by the system
 	BlockchainAccountId        string
 	BlockchainDirectoryAddress string
+	DefaultTorrentWebSeedURL   string
+	CheckImageSig              bool
 }
 
 // This is the configuration options for Agreement bot flavor of Anax
