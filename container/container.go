@@ -585,30 +585,43 @@ func NewContainerWorker(config *config.HorizonConfig, db *bolt.DB) *ContainerWor
 		panic("Unable to access workload RO storage dir specified in config")
 	}
 
-	if ipt, err := iptables.New(); err != nil {
-		glog.Errorf("Failed to instantiate iptables Client: %v", err)
-		panic("Unable to instantiate iptables Client")
-	} else if client, err := docker.NewClient(config.Edge.DockerEndpoint); err != nil {
+	// if nil, support is disabled
+	var ipt *iptables.IPTables
+	var err error
+
+	if config.Edge.DisableIptablesManipulation {
+		glog.Warning("Iptables manipulation disabled by configuration")
+	} else {
+		ipt, err = iptables.New()
+		if err != nil {
+			glog.Errorf("Failed to instantiate iptables Client: %v", err)
+			panic("Unable to instantiate iptables Client")
+		}
+	}
+
+	var client *docker.Client
+	client, err = docker.NewClient(config.Edge.DockerEndpoint)
+	if err != nil {
 		glog.Errorf("Failed to instantiate docker Client: %v", err)
 		panic("Unable to instantiate docker Client")
-	} else {
-		worker := &ContainerWorker{
-			Worker: worker.Worker{
-				Manager: worker.Manager{
-					Config:   config,
-					Messages: messages,
-				},
-				Commands: commands,
-			},
-			db:       db,
-			client:   client,
-			iptables: ipt,
-			inAgbot:  inAgbot,
-		}
-
-		worker.start()
-		return worker
 	}
+
+	worker := &ContainerWorker{
+		Worker: worker.Worker{
+			Manager: worker.Manager{
+				Config:   config,
+				Messages: messages,
+			},
+			Commands: commands,
+		},
+		db:       db,
+		client:   client,
+		iptables: ipt,
+		inAgbot:  inAgbot,
+	}
+
+	worker.start()
+	return worker
 }
 
 func (w *ContainerWorker) Messages() chan events.Message {
@@ -915,54 +928,58 @@ func generatePermittedString(isolation *NetworkIsolation, network docker.Contain
 
 func processPostCreate(ipt *iptables.IPTables, client *docker.Client, agreementId string, deployment DeploymentDescription, configureRaw []byte, hasSpecifiedEthAccount bool, containers []interface{}, fail func(container *docker.Container, name string, err error) error) error {
 
-	rules, err := ipt.List("filter", IPT_COLONUS_ISOLATED_CHAIN)
-	if err != nil {
-		// could be that it just isn't created, try that
-
-		err := ipt.NewChain("filter", IPT_COLONUS_ISOLATED_CHAIN)
+	if ipt == nil {
+		glog.Warning("Iptables manipulation disabled, not setting up isolation chain")
+	} else {
+		rules, err := ipt.List("filter", IPT_COLONUS_ISOLATED_CHAIN)
 		if err != nil {
-			return fail(nil, "<unknown>", fmt.Errorf("Unable to manipulate IPTables rules in container post-creation step: Error: %v", err))
-		}
+			// could be that it just isn't created, try that
 
-		rules, err = ipt.List("filter", IPT_COLONUS_ISOLATED_CHAIN)
-		if err != nil {
-			return fail(nil, "<unknown>", fmt.Errorf("Unable to manipulate IPTables rules in container post-creation step: Error: %v", err))
-		}
-	}
+			err := ipt.NewChain("filter", IPT_COLONUS_ISOLATED_CHAIN)
+			if err != nil {
+				return fail(nil, "<unknown>", fmt.Errorf("Unable to manipulate IPTables rules in container post-creation step: Error: %v", err))
+			}
 
-	foundReturn := false
-	for _, rule := range rules {
-		if rule == fmt.Sprintf("-A %v -j RETURN", IPT_COLONUS_ISOLATED_CHAIN) {
-			foundReturn = true
-		}
-	}
-
-	if !foundReturn {
-		err = ipt.Insert("filter", IPT_COLONUS_ISOLATED_CHAIN, 1, "-j", "RETURN")
-		if err != nil {
-			return fail(nil, "<unknown>", fmt.Errorf("Unable to manipulate IPTables rules in container post-creation step: Error: %v", err))
-		}
-	}
-
-	rules, err = ipt.List("filter", "FORWARD")
-
-	if err != nil {
-		return fail(nil, "<unknown>", fmt.Errorf("Unable to manipulate IPTables rules in container post-creation step: Error: %v", err))
-	}
-	for _, rule := range rules {
-		if rule == fmt.Sprintf("-A FORWARD -j %v", IPT_COLONUS_ISOLATED_CHAIN) {
-			glog.Infof("rule: %v", rule)
-			err := ipt.Delete("filter", "FORWARD", "-j", IPT_COLONUS_ISOLATED_CHAIN)
+			rules, err = ipt.List("filter", IPT_COLONUS_ISOLATED_CHAIN)
 			if err != nil {
 				return fail(nil, "<unknown>", fmt.Errorf("Unable to manipulate IPTables rules in container post-creation step: Error: %v", err))
 			}
 		}
-	}
 
-	// need to always insert this at the head of the chain; if this fails, there will be no isolation security but normal container traffic will be allowed
-	err = ipt.Insert("filter", "FORWARD", 1, "-j", IPT_COLONUS_ISOLATED_CHAIN)
-	if err != nil {
-		return fail(nil, "<unknown>", fmt.Errorf("Unable to manipulate IPTables rules in container post-creation step: Error: %v", err))
+		foundReturn := false
+		for _, rule := range rules {
+			if rule == fmt.Sprintf("-A %v -j RETURN", IPT_COLONUS_ISOLATED_CHAIN) {
+				foundReturn = true
+			}
+		}
+
+		if !foundReturn {
+			err = ipt.Insert("filter", IPT_COLONUS_ISOLATED_CHAIN, 1, "-j", "RETURN")
+			if err != nil {
+				return fail(nil, "<unknown>", fmt.Errorf("Unable to manipulate IPTables rules in container post-creation step: Error: %v", err))
+			}
+		}
+
+		rules, err = ipt.List("filter", "FORWARD")
+
+		if err != nil {
+			return fail(nil, "<unknown>", fmt.Errorf("Unable to manipulate IPTables rules in container post-creation step: Error: %v", err))
+		}
+		for _, rule := range rules {
+			if rule == fmt.Sprintf("-A FORWARD -j %v", IPT_COLONUS_ISOLATED_CHAIN) {
+				glog.Infof("rule: %v", rule)
+				err := ipt.Delete("filter", "FORWARD", "-j", IPT_COLONUS_ISOLATED_CHAIN)
+				if err != nil {
+					return fail(nil, "<unknown>", fmt.Errorf("Unable to manipulate IPTables rules in container post-creation step: Error: %v", err))
+				}
+			}
+		}
+
+		// need to always insert this at the head of the chain; if this fails, there will be no isolation security but normal container traffic will be allowed
+		err = ipt.Insert("filter", "FORWARD", 1, "-j", IPT_COLONUS_ISOLATED_CHAIN)
+		if err != nil {
+			return fail(nil, "<unknown>", fmt.Errorf("Unable to manipulate IPTables rules in container post-creation step: Error: %v", err))
+		}
 	}
 
 	comment := fmt.Sprintf("agreement_id=%v", agreementId)
@@ -1702,17 +1719,21 @@ func (b *ContainerWorker) syncupResources() {
 			}
 		}
 
-		// Fourth, run through IP routing table rules, looking for rules that are leftover from old agreements. Be aware that there
-		// could be other non-Horizon rules on this host, so we have to be careful to NOT terminate them.
-		if exists, err := b.iptables.Exists("filter", IPT_COLONUS_ISOLATED_CHAIN, "-j", "RETURN"); err != nil {
-			fail(fmt.Sprintf("ContainerWorker unable to interrogate iptables on host. Error: %v", err))
-		} else if !exists {
-			glog.V(3).Infof(fmt.Sprintf("ContainerWorker primary redirect rule missing from %v chain.", IPT_COLONUS_ISOLATED_CHAIN))
-		} else if rules, err := b.iptables.List("filter", IPT_COLONUS_ISOLATED_CHAIN); err != nil {
-			fail(fmt.Sprintf("ContainerWorker unable to list rules in %v. Error: %v", IPT_COLONUS_ISOLATED_CHAIN, err))
+		if b.iptables == nil {
+			glog.Warning("Iptables manipulation support disabled, not procesing existing isolation rules")
 		} else {
-			for ix := len(rules) - 1; ix >= 0; ix-- {
-				glog.V(5).Infof("ContainerWorker found isolation rule: %v", rules[ix])
+			// Fourth, run through IP routing table rules, looking for rules that are leftover from old agreements. Be aware that there
+			// could be other non-Horizon rules on this host, so we have to be careful to NOT terminate them.
+			if exists, err := b.iptables.Exists("filter", IPT_COLONUS_ISOLATED_CHAIN, "-j", "RETURN"); err != nil {
+				fail(fmt.Sprintf("ContainerWorker unable to interrogate iptables on host. Error: %v", err))
+			} else if !exists {
+				glog.V(3).Infof(fmt.Sprintf("ContainerWorker primary redirect rule missing from %v chain.", IPT_COLONUS_ISOLATED_CHAIN))
+			} else if rules, err := b.iptables.List("filter", IPT_COLONUS_ISOLATED_CHAIN); err != nil {
+				fail(fmt.Sprintf("ContainerWorker unable to list rules in %v. Error: %v", IPT_COLONUS_ISOLATED_CHAIN, err))
+			} else {
+				for ix := len(rules) - 1; ix >= 0; ix-- {
+					glog.V(5).Infof("ContainerWorker found isolation rule: %v", rules[ix])
+				}
 			}
 		}
 
@@ -1879,27 +1900,36 @@ func (b *ContainerWorker) resourcesRemove(agreements []string) error {
 	}
 
 	// the primary rule
-	if exists, err := b.iptables.Exists("filter", IPT_COLONUS_ISOLATED_CHAIN, "-j", "RETURN"); err != nil {
-		return fmt.Errorf("Unable to interrogate iptables on host. Error: %v", err)
-	} else if !exists {
-		glog.V(3).Infof("Primary redirect rule missing from %v chain. Skipping agreement rule deletion", IPT_COLONUS_ISOLATED_CHAIN)
+	if b.iptables == nil {
+		glog.Warning("Iptables manipulation support disabled, not procesing existing isolation rules")
 	} else {
-		// free iptables rules for this agreement (will hose access to shared too)
-		rules, err := b.iptables.List("filter", IPT_COLONUS_ISOLATED_CHAIN)
+		var exists bool
+		var err error
+		exists, err = b.iptables.Exists("filter", IPT_COLONUS_ISOLATED_CHAIN, "-j", "RETURN")
 		if err != nil {
-			return fmt.Errorf("Unable to list rules in %v. Error: %v", IPT_COLONUS_ISOLATED_CHAIN, err)
+			return fmt.Errorf("Unable to interrogate iptables on host. Error: %v", err)
 		}
 
-		for _, agreementId := range agreements {
-			glog.V(4).Infof("Removing iptables isolation rules for agreement %v", agreementId)
+		if !exists {
+			glog.V(3).Infof("Primary redirect rule missing from %v chain. Skipping agreement rule deletion", IPT_COLONUS_ISOLATED_CHAIN)
+		} else {
+			// free iptables rules for this agreement (will hose access to shared too)
+			rules, err := b.iptables.List("filter", IPT_COLONUS_ISOLATED_CHAIN)
+			if err != nil {
+				return fmt.Errorf("Unable to list rules in %v. Error: %v", IPT_COLONUS_ISOLATED_CHAIN, err)
+			}
 
-			// count backwards so we don't have to adjust the indices b/c they change w/ each ipt delete
-			for ix := len(rules) - 1; ix >= 0; ix-- {
-				if strings.Contains(rules[ix], fmt.Sprintf("agreement_id=%v", agreementId)) {
+			for _, agreementId := range agreements {
+				glog.V(4).Infof("Removing iptables isolation rules for agreement %v", agreementId)
 
-					glog.V(3).Infof("Deleting isolation rule: %v", rules[ix])
-					if err := b.iptables.Delete("filter", IPT_COLONUS_ISOLATED_CHAIN, strconv.Itoa(ix)); err != nil {
-						return err
+				// count backwards so we don't have to adjust the indices b/c they change w/ each ipt delete
+				for ix := len(rules) - 1; ix >= 0; ix-- {
+					if strings.Contains(rules[ix], fmt.Sprintf("agreement_id=%v", agreementId)) {
+
+						glog.V(3).Infof("Deleting isolation rule: %v", rules[ix])
+						if err := b.iptables.Delete("filter", IPT_COLONUS_ISOLATED_CHAIN, strconv.Itoa(ix)); err != nil {
+							return err
+						}
 					}
 				}
 			}

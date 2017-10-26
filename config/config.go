@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 )
 
+const DisableIptablesManipulationEnvvarName = "HZN_DISABLE_IPTABLES_MANIPULATION"
 const ExchangeURLEnvvarName = "HZN_EXCHANGE_URL"
 
 type HorizonConfig struct {
@@ -22,6 +23,7 @@ type Config struct {
 	TorrentDir                    string
 	APIListen                     string
 	DBPath                        string
+	DisableIptablesManipulation   bool
 	DockerEndpoint                string
 	DefaultCPUSet                 string
 	DefaultServiceRegistrationRAM int64
@@ -96,6 +98,10 @@ func enrichFromEnvvars(config *HorizonConfig) error {
 	} else {
 		// TODO: Enable this once we require the envvar to be set. For now, we don't return the error
 		// return fmt.Errorf("Unspecified but required envvar: %s", ExchangeURLEnvvarName)
+	}
+
+	if disableIptablesManipulation := os.Getenv(DisableIptablesManipulationEnvvarName); disableIptablesManipulation != "" {
+		config.Edge.DisableIptablesManipulation = true
 	}
 
 	return nil
