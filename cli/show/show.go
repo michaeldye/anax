@@ -328,7 +328,7 @@ func Keys() {
 	cliutils.HorizonGet("publickey", []int{200}, &apiOutput)
 	var ok bool
 	if _, ok = apiOutput["pem"]; !ok {
-		cliutils.Fatal(cliutils.HTTP_ERROR, "horizon api publickey output did not include 'pem' key")
+		cliutils.Fatal(cliutils.HTTP_ERROR, "horizon api publickey/x509 cert output did not include 'pem'-encoded block")
 	}
 	jsonBytes, err := json.MarshalIndent(apiOutput["pem"], "", cliutils.JSON_INDENT)
 	if err != nil {

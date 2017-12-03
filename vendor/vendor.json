@@ -440,6 +440,36 @@
 			"revisionTime": "2017-09-29T04:46:40Z"
 		},
 		{
+			"checksumSHA1": "OwkKcW74yguiZLYSKrEN0TQI0Kg=",
+			"path": "github.com/open-horizon/rsapss-tool",
+			"revision": "469316935456edc0922b0772646e64113524f593",
+			"revisionTime": "2017-12-03T22:19:37Z"
+		},
+		{
+			"checksumSHA1": "h28o0+CEghkJELsf/KRNqGXZ7LA=",
+			"path": "github.com/open-horizon/rsapss-tool/constants",
+			"revision": "469316935456edc0922b0772646e64113524f593",
+			"revisionTime": "2017-12-03T22:19:37Z"
+		},
+		{
+			"checksumSHA1": "8GuZ0guQabTvdkc/lIKhlrv/Toc=",
+			"path": "github.com/open-horizon/rsapss-tool/generatekeys",
+			"revision": "469316935456edc0922b0772646e64113524f593",
+			"revisionTime": "2017-12-03T22:19:37Z"
+		},
+		{
+			"checksumSHA1": "HqliZTnaXb8EpnO/oQzC2ytM34c=",
+			"path": "github.com/open-horizon/rsapss-tool/listkeys",
+			"revision": "469316935456edc0922b0772646e64113524f593",
+			"revisionTime": "2017-12-03T22:19:37Z"
+		},
+		{
+			"checksumSHA1": "6Ejtwv2PlXR8sT203iR38S7Y5qQ=",
+			"path": "github.com/open-horizon/rsapss-tool/sign",
+			"revision": "469316935456edc0922b0772646e64113524f593",
+			"revisionTime": "2017-12-03T22:19:37Z"
+		},
+		{
 			"checksumSHA1": "VUNbvSnk5sCRMPopbBqaKYM3ZUc=",
 			"path": "github.com/open-horizon/rsapss-tool/verify",
 			"revision": "d48d3dbcb9ddb13d4e241041965d94b35ee16628",
@@ -486,6 +516,12 @@
 			"path": "github.com/tylertreat/BoomFilters",
 			"revision": "ae0b9585d4b87b2fe0b49ee09270abae7aaad179",
 			"revisionTime": "2016-01-19T23:24:31Z"
+		},
+		{
+			"checksumSHA1": "9/2bmiVZTtVxrBcK+zb/VBQ2Eh0=",
+			"path": "github.com/urfave/cli",
+			"revision": "119bb6564841921ce6f1401e0f5d75317bdd9f4d",
+			"revisionTime": "2017-12-03T21:42:37Z"
 		},
 		{
 			"checksumSHA1": "YRle3ACR23KJ12uQTwcInRL9fUw=",
