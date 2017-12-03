@@ -1,0 +1,14 @@
+{
+    "header": {
+        "name": "new policy",
+        "version": "1.0"
+    },
+    "valueExchange": {},
+    "resourceLimits": {},
+    "dataVerification": {
+        "metering": {}
+    },
+    "proposalRejection": {},
+    "ha_group": {},
+    "nodeHealth": {}
+}
