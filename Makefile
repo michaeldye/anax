@@ -19,7 +19,7 @@ export PATH := $(TMPGOPATH)/bin:$(PATH)
 # we use a script that will give us the debian arch version since that's what the packaging system inputs
 arch ?= $(shell tools/arch-tag)
 
-COMPILE_ARGS := CGO_ENABLED=0
+COMPILE_ARGS := \
 # TODO: handle other ARM architectures on build boxes too
 ifeq ($(arch),armhf)
 	COMPILE_ARGS +=  GOARCH=arm GOARM=7
@@ -48,13 +48,13 @@ $(EXECUTABLE): $(shell find . -name '*.go' -not -path './vendor/*') $(CLI_EXECUT
 	@echo "Producing $(EXECUTABLE) given arch: $(arch)"
 	cd $(PKGPATH) && \
 	  export GOPATH=$(TMPGOPATH); \
-	    $(COMPILE_ARGS) go build -o $(EXECUTABLE)
+	    $(COMPILE_ARGS) CGO_ENABLED=0 go build -o $(EXECUTABLE)
 
 $(CLI_EXECUTABLE): $(shell find . -name '*.go' -not -path './vendor/*')
 	@echo "Producing $(CLI_EXECUTABLE) given arch: $(arch)"
 	cd $(PKGPATH) && \
 	  export GOPATH=$(TMPGOPATH); \
-	    $(COMPILE_ARGS) go build -o $(CLI_EXECUTABLE) $(CLI_EXECUTABLE).go
+	    $(COMPILE_ARGS) CGO_ENABLED=1 go build -o $(CLI_EXECUTABLE) $(CLI_EXECUTABLE).go
 
 clean: mostlyclean
 	@echo "Clean"
